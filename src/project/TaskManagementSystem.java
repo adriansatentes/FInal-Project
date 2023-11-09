@@ -2,26 +2,32 @@ package project;
 
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.Utilities;
+
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Point2D;
-import java.util.ArrayList;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.PriorityQueue;
 import java.util.regex.Pattern;
+import java.util.ArrayList;
+import java.util.Comparator;
 
 public class TaskManagementSystem extends JFrame {
     private Queue inProgressTasks = new Queue();
     private Queue completedTasks = new Queue();
     private ArrayList<Task> taskList = new ArrayList<>();
+    private PriorityQueue<Task> priorityTasks = new PriorityQueue<>(new TaskPriorityComparator());
 
     private JTextArea inProgressTasksTextArea;
     private JTextArea completedTasksTextArea;
     private JTextField searchTextField;
-
+    private JTextArea priorityTasksTextArea;
+    
     public TaskManagementSystem() {
         setTitle("TechMach Innovations, LLC.");
         setSize(800, 500);
@@ -37,12 +43,20 @@ public class TaskManagementSystem extends JFrame {
         inProgressTasksTextArea.setEditable(false);
 
         completedTasksTextArea = new JTextArea(20, 25);
-        completedTasksTextArea.setEditable(false);
-
+        completedTasksTextArea.setEditable(false);  priorityTasksTextArea = new JTextArea(20, 25);
+        priorityTasksTextArea.setEditable(false);
+        
+        JScrollPane priorityScrollPane = new JScrollPane(priorityTasksTextArea);
         JScrollPane inProgressScrollPane = new JScrollPane(inProgressTasksTextArea);
         JScrollPane completedScrollPane = new JScrollPane(completedTasksTextArea);
         backgroundLabel.add(inProgressScrollPane, BorderLayout.CENTER);
         backgroundLabel.add(completedScrollPane, BorderLayout.EAST);
+        backgroundLabel.add(priorityScrollPane, BorderLayout.SOUTH);
+        JTextArea priorityTasksTextArea = new JTextArea(20, 25);
+        priorityTasksTextArea.setEditable(false);
+        JScrollPane priorityScrollPane1 = new JScrollPane(priorityTasksTextArea);
+        backgroundLabel.add(priorityScrollPane1, BorderLayout.SOUTH);
+
 
         JPanel topPanel = new JPanel();
         searchTextField = new JTextField(30);
@@ -58,14 +72,19 @@ public class TaskManagementSystem extends JFrame {
 
         JPanel bottomPanel = new JPanel();
         JButton addButton = new JButton("Add Task");
+        JButton viewPriorityButton = new JButton("View Priority Tasks");
         JButton completeButton = new JButton("Complete Task");
         JButton deleteButton = new JButton("Delete Task");
 
         bottomPanel.add(addButton);
+        bottomPanel.add(deleteButton);bottomPanel.add(viewPriorityButton);
         bottomPanel.add(completeButton);
-        bottomPanel.add(deleteButton);
+        
+        
+        
 
         addButton.addActionListener(e -> addTask());
+        viewPriorityButton.addActionListener(e -> viewPriorityTasks());
         deleteButton.addActionListener(e -> deleteTask());
         completeButton.addActionListener(e -> completeTask());
         searchButton.addActionListener(e -> searchTask());
@@ -75,30 +94,42 @@ public class TaskManagementSystem extends JFrame {
         add(centerPanel, BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
     }
+    
 
     private void addTask() {
-        TaskInputFrame inputForm = new TaskInputFrame(this); 
+        TaskInputFrame inputForm = new TaskInputFrame(this);
         inputForm.setVisible(true);
     }
 
     public void addTaskToList(Task task) {
         boolean isDuplicate = taskList.stream()
                 .anyMatch(existingTask -> existingTask.getTaskName().equalsIgnoreCase(task.getTaskName()));
+
         if (!isDuplicate && !containsSpecialCharactersOrNumbers(task.getTaskName())
                 && !containsSpecialCharactersOrNumbers(task.getInstructions())) {
-            // Set the due date for the task to today's date
-            Date currentDate = new Date();
-            task.setDueDate(currentDate);
+            boolean isPriority = isPriorityTask(task);
+
+            if (isPriority) {
+                if (!priorityTasks.contains(task)) {
+                    priorityTasks.offer(task);
+                }
+            } else {
+                Date currentDate = new Date();
+                task.setDueDate(currentDate);
+            }
+
+            if (!inProgressTasks.contains(task.getTaskName())) {
+                inProgressTasks.enqueue(task.getTaskName());
+            }
 
             taskList.add(task);
-            inProgressTasks.enqueue(task.getTaskName());
             updateTaskLists();
         } else {
             JOptionPane.showMessageDialog(this, "Task is invalid or duplicate", "Invalid Task", JOptionPane.WARNING_MESSAGE);
         }
     }
 
-
+    
     public boolean containsSpecialCharactersOrNumbers(String input) {
         Pattern pattern = Pattern.compile("[^a-zA-Z\\s]");
         return pattern.matcher(input).find();
@@ -116,6 +147,7 @@ public class TaskManagementSystem extends JFrame {
             }
 
             if (foundTask != null) {
+                // Create a TaskViewFrame with the found task
                 TaskViewFrame taskViewFrame = new TaskViewFrame(foundTask);
                 taskViewFrame.setVisible(true);
             } else {
@@ -125,6 +157,7 @@ public class TaskManagementSystem extends JFrame {
 
         searchTextField.setText("");
     }
+
 
     private void deleteTask() {
         String taskName = searchTextField.getText().trim();
@@ -147,14 +180,34 @@ public class TaskManagementSystem extends JFrame {
     }
 
     private void completeTask() {
-        if (!inProgressTasks.isEmpty()) {
+        if (!priorityTasks.isEmpty()) {
+            Task completedTask = priorityTasks.poll();
+            if (completedTask.getTaskName().toLowerCase().contains("urgent")) {
+                inProgressTasks.delete(completedTask.getTaskName()); 
+                completedTasks.enqueue(completedTask.getTaskName());
+            } else {
+                inProgressTasks.enqueue(completedTask.getTaskName());
+            }
+        } else if (!inProgressTasks.isEmpty()) {
             String taskName = inProgressTasks.dequeue();
             completedTasks.enqueue(taskName);
-            updateTaskLists();
         } else {
             JOptionPane.showMessageDialog(this, "No tasks in progress to complete", "Task Not Found", JOptionPane.WARNING_MESSAGE);
         }
+        updateTaskLists();
     }
+    private void viewPriorityTasks() {
+        if (!priorityTasks.isEmpty()) {
+            StringBuilder priorityTasksText = new StringBuilder("Priority Tasks:\n");
+            for (Task task : priorityTasks) {
+                priorityTasksText.append(task.getTaskName()).append("\n");
+            }
+            JOptionPane.showMessageDialog(this, priorityTasksText.toString(), "Priority Tasks", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this, "No priority tasks available", "Priority Tasks", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
 
     public void updateTaskInViewFrame(Task task) {
         for (int i = 0; i < taskList.size(); i++) {
@@ -165,28 +218,40 @@ public class TaskManagementSystem extends JFrame {
                 break;
             }
         }
-        updateTaskLists(); 
+        updateTaskLists();
 
-        // Refresh the task queues
-        inProgressTasks = new Queue();
-        completedTasks = new Queue();
-        for (Task t : taskList) {
-            if (inProgressTasksTextArea.getText().contains(t.getTaskName())) {
-                inProgressTasks.enqueue(t.getTaskName());
-            } else if (completedTasksTextArea.getText().contains(t.getTaskName())) {
-                completedTasks.enqueue(t.getTaskName());
+        if (isPriorityTask(task)) {
+            if (!priorityTasks.contains(task)) {
+                priorityTasks.offer(task);
+            }
+        } else {
+            inProgressTasks = new Queue();
+            completedTasks = new Queue();
+            for (Task t : taskList) {
+                if (inProgressTasksTextArea.getText().contains(t.getTaskName())) {
+                    inProgressTasks.enqueue(t.getTaskName());
+                } else if (completedTasksTextArea.getText().contains(t.getTaskName())) {
+                    completedTasks.enqueue(t.getTaskName());
+                }
             }
         }
     }
+
 
     private void updateTaskLists() {
         inProgressTasksTextArea.setText("In Progress:\n" + inProgressTasks.display());
         completedTasksTextArea.setText("Completed:\n" + completedTasks.display());
 
+        StringBuilder priorityTasksText = new StringBuilder("Priority Tasks:\n");
+        for (Task task : priorityTasks) {
+            priorityTasksText.append(task.getTaskName()).append("\n");
+        }
+        priorityTasksTextArea.setText(priorityTasksText.toString());
+
         inProgressTasksTextArea.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) { 
+                if (e.getClickCount() == 2) {
                     Point2D point2D = e.getPoint();
                     int caretPosition = inProgressTasksTextArea.viewToModel2D(point2D);
 
@@ -197,7 +262,6 @@ public class TaskManagementSystem extends JFrame {
 
                         String clickedLine = inProgressTasksTextArea.getText(startOffset, endOffset - startOffset);
 
-                       
                         String[] parts = clickedLine.split("\\. ", 2);
                         if (parts.length == 2) {
                             String taskName = parts[1];
@@ -218,6 +282,30 @@ public class TaskManagementSystem extends JFrame {
                 taskViewFrame.setVisible(true);
                 break;
             }
+        }
+    }
+    private boolean isPriorityTask(Task task) {
+        // Check if the task's name contains "Urgent" to consider it a priority task
+        return task.getTaskName().toLowerCase().contains("urgent");
+    }
+    private class TaskPriorityComparator implements Comparator<Task> {
+        @Override
+        public int compare(Task task1, Task task2) {
+            // Compare tasks based on their input time and date
+            SimpleDateFormat dateFormat = new SimpleDateFormat("hh:mm a EEE MMM dd yyyy");
+            String inputDateTime1 = task1.getTime() + " " + task1.getDate();
+            String inputDateTime2 = task2.getTime() + " " + task2.getDate();
+
+            try {
+                Date inputDate1 = dateFormat.parse(inputDateTime1);
+                Date inputDate2 = dateFormat.parse(inputDateTime2);
+
+                return inputDate1.compareTo(inputDate2);
+            } catch (ParseException e) {
+                e.printStackTrace();
+            }
+
+            return 0; // Return 0 if there is an error
         }
     }
 

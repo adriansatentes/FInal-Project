@@ -8,6 +8,9 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
+import java.util.Timer;
+import java.util.TimerTask;
+
 public class TaskViewFrame extends JFrame {
     private Task task;
     private JTextField taskNameField;
@@ -59,42 +62,46 @@ public class TaskViewFrame extends JFrame {
         buttonPanel.add(saveButton);
         taskInfoPanel.add(new JLabel());
         taskInfoPanel.add(buttonPanel);
-        
 
-        saveButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                task.setTaskName(taskNameField.getText());
-                task.setInstructions(taskInstructionsArea.getText());
-                task.setTime(taskTimeField.getText());
-                task.setDate(taskDateField.getText());
-                
+        saveButton.addActionListener(e -> {
+            task.setTaskName(taskNameField.getText());
+            task.setInstructions(taskInstructionsArea.getText());
+            task.setTime(taskTimeField.getText());
+            task.setDate(taskDateField.getText());
 
-                String dueDateString = dueDateField.getText();
-                try {
-                    SimpleDateFormat dateFormat = new SimpleDateFormat("EEE MMM dd HH:mm yyyy");
-                    Date dueDate = dateFormat.parse(dueDateString);
-                    task.setDueDate(dueDate);
-                } catch (ParseException ex) {
-                    JOptionPane.showMessageDialog(
-                        TaskViewFrame.this,
-                        "Invalid Date format. Please use 'EEE MMM dd HH:mm yyyy'",
-                        "Invalid Input",
-                        JOptionPane.WARNING_MESSAGE
-                    );
-                    return; 
-                }
-
-                saveButton.setEnabled(true); 
-                dispose();
+            String dueDateString = dueDateField.getText();
+            try {
+                SimpleDateFormat dateFormat = new SimpleDateFormat("EEE MMM dd HH:mm yyyy");
+                Date dueDate = dateFormat.parse(dueDateString);
+                task.setDueDate(dueDate);
+            } catch (ParseException ex) {
+                JOptionPane.showMessageDialog(
+                    TaskViewFrame.this,
+                    "Invalid Date format. Please use 'EEE MMM dd HH:mm yyyy'",
+                    "Invalid Input",
+                    JOptionPane.WARNING_MESSAGE
+                );
+                return;
             }
+
+            saveButton.setEnabled(true);
+            dispose();
         });
         add(taskInfoPanel, BorderLayout.CENTER);
+
+        // Create a Timer to update the due date in real-time
+        Timer timer = new Timer();
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                String updatedDueDate = formatDueDate(task.getDueDate());
+                SwingUtilities.invokeLater(() -> dueDateField.setText(updatedDueDate));
+            }
+        }, 0, 1000); // Update every second
     }
 
     private String formatDueDate(Date dueDate) {
         SimpleDateFormat dateFormat = new SimpleDateFormat("EEE MMM dd HH:mm yyyy");
         return dueDate != null ? dateFormat.format(dueDate) : "";
     }
-    
 }
